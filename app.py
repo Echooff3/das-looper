@@ -90,7 +90,8 @@ form.addEventListener('submit', async (event) => {
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
-    const fileName = `${(input.files[0].name || 'video').replace(/\.[^.]+$/, '')}-looped-x4.mp4`;
+    const baseName = (input.files[0].name || 'video').replace(/\.[^.]+$/, '');
+    const fileName = baseName + '-looped-x4.mp4';
     anchor.href = url;
     anchor.download = fileName;
     document.body.appendChild(anchor);
