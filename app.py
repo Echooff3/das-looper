@@ -59,6 +59,7 @@ def home():
             id="form",
         ),
         Div(id="status"),
+        Div(id="result", style="margin-top: 1rem;"),
         P("Tip: on iPhone, open the downloaded file and tap Share → Save Video."),
         Script(
             """
@@ -66,6 +67,8 @@ const form = document.getElementById('form');
 const input = document.getElementById('video');
 const submit = document.getElementById('submit');
 const status = document.getElementById('status');
+const result = document.getElementById('result');
+let currentObjectUrl = null;
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -76,6 +79,7 @@ form.addEventListener('submit', async (event) => {
 
   submit.disabled = true;
   status.textContent = 'Processing... this can take a moment.';
+  result.innerHTML = '';
 
   const body = new FormData();
   body.append('video', input.files[0]);
@@ -89,25 +93,51 @@ form.addEventListener('submit', async (event) => {
 
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
     const baseName = (input.files[0].name || 'video').replace(/\.[^.]+$/, '');
     const fileName = baseName + '-looped-x4.mp4';
-    anchor.href = url;
-    anchor.download = fileName;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
 
-    status.textContent = 'Done! Your looped video has been downloaded.';
+    if (currentObjectUrl) {
+      URL.revokeObjectURL(currentObjectUrl);
+    }
+    currentObjectUrl = url;
+
+    const video = document.createElement('video');
+    video.controls = true;
+    video.src = url;
+    video.style.display = 'block';
+    video.style.maxWidth = '100%';
+    video.style.marginTop = '0.5rem';
+
+    const downloadButton = document.createElement('a');
+    downloadButton.href = url;
+    downloadButton.download = fileName;
+    downloadButton.textContent = 'Download looped video';
+    downloadButton.style.display = 'inline-block';
+    downloadButton.style.marginTop = '0.75rem';
+    downloadButton.style.padding = '0.5rem 0.75rem';
+    downloadButton.style.border = '1px solid #ccc';
+    downloadButton.style.borderRadius = '6px';
+    downloadButton.style.textDecoration = 'none';
+
+    result.appendChild(video);
+    result.appendChild(downloadButton);
+
+    status.textContent = 'Done! Preview your looped video below or download it.';
   } catch (error) {
     status.textContent = error.message;
   } finally {
     submit.disabled = false;
   }
 });
+
+window.addEventListener('beforeunload', () => {
+  if (currentObjectUrl) {
+    URL.revokeObjectURL(currentObjectUrl);
+  }
+});
             """
         ),
+        style="padding: 1.25rem; max-width: 48rem; margin: 0 auto;",
     )
 
 
