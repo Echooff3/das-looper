@@ -95,6 +95,7 @@ form.addEventListener('submit', async (event) => {
     const url = URL.createObjectURL(blob);
     const baseName = (input.files[0].name || 'video').replace(/\.[^.]+$/, '');
     const fileName = baseName + '-looped-x4.mp4';
+    const file = new File([blob], fileName, { type: 'video/mp4' });
 
     if (currentObjectUrl) {
       URL.revokeObjectURL(currentObjectUrl);
@@ -119,8 +120,38 @@ form.addEventListener('submit', async (event) => {
     downloadButton.style.borderRadius = '6px';
     downloadButton.style.textDecoration = 'none';
 
+    const shareButton = document.createElement('button');
+    shareButton.type = 'button';
+    shareButton.textContent = 'Share video';
+    shareButton.style.display = 'inline-block';
+    shareButton.style.marginTop = '0.75rem';
+    shareButton.style.marginLeft = '0.5rem';
+    shareButton.style.padding = '0.5rem 0.75rem';
+    shareButton.style.border = '1px solid #ccc';
+    shareButton.style.borderRadius = '6px';
+    shareButton.style.background = '#fff';
+    shareButton.style.cursor = 'pointer';
+
+    shareButton.addEventListener('click', async () => {
+      const canShareFile = navigator.canShare && navigator.canShare({ files: [file] });
+      if (!canShareFile) {
+        status.textContent = 'Sharing is not supported here. Downloading instead.';
+        downloadButton.click();
+        return;
+      }
+
+      try {
+        await navigator.share({ files: [file], title: fileName });
+        status.textContent = 'Share sheet opened.';
+      } catch (error) {
+        status.textContent = 'Could not share. Downloading instead.';
+        downloadButton.click();
+      }
+    });
+
     result.appendChild(video);
     result.appendChild(downloadButton);
+    result.appendChild(shareButton);
 
     status.textContent = 'Done! Preview your looped video below or download it.';
   } catch (error) {
