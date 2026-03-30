@@ -14,6 +14,7 @@ Simple stateless FastHTML app for Railway that loops an uploaded video 4 times w
 ```bash
 python -m venv .venv
 source .venv/bin/activate
+pip install python-fasthtml
 pip install -r requirements.txt
 python app.py
 ```
@@ -46,3 +47,8 @@ Returns JSON:
 ```json
 { "ok": true }
 ```
+
+
+## Troubleshooting
+
+If deployment logs show an import error around `fasthtml.common`, make sure the `python-fasthtml` package is installed (the import module is `fasthtml`, but the package name on PyPI is `python-fasthtml`).
