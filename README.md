@@ -1,12 +1,12 @@
 # das-looper
 
-Simple stateless FastHTML app for Railway that loops an uploaded video 4 times with FFmpeg and returns a downloadable MP4.
+Simple stateless FastHTML app for Railway that stitches 4 uploaded videos together with FFmpeg and returns a downloadable MP4.
 
 ## Features
 
-- Upload video from browser
-- FFmpeg concatenates the same input 4x
-- Returns a downloadable `*-looped-x4.mp4`
+- Upload 4 videos from browser
+- FFmpeg concatenates them in uploaded order
+- Returns a downloadable `*-stitched.mp4`
 - Stateless: all files stored temporarily in `/tmp` and removed after response
 
 ## Run locally
@@ -31,11 +31,11 @@ This repo includes a `Dockerfile` with FFmpeg preinstalled.
 
 ## API
 
-### `POST /loop`
+### `POST /stitch`
 
 Multipart form field:
 
-- `video` — video file
+- `videos` — exactly 4 video files (same field repeated in multipart form)
 
 Response: file download (`video/mp4`).
 

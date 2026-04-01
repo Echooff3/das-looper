@@ -19,9 +19,11 @@ def _safe_basename(filename: str) -> str:
     return cleaned or "video"
 
 
-async def _run_ffmpeg(input_path: str, output_path: str, list_path: str) -> None:
-    escaped_input = input_path.replace("'", "'\\''")
-    concat_list = (f"file '{escaped_input}'\n") * 4
+async def _run_ffmpeg(input_paths: list[str], output_path: str, list_path: str) -> None:
+    concat_list = ""
+    for input_path in input_paths:
+        escaped_input = input_path.replace("'", "'\\''")
+        concat_list += f"file '{escaped_input}'\n"
 
     with open(list_path, "w", encoding="utf-8") as file_list:
         file_list.write(concat_list)
@@ -37,8 +39,16 @@ async def _run_ffmpeg(input_path: str, output_path: str, list_path: str) -> None
         list_path,
         "-movflags",
         "+faststart",
-        "-c",
-        "copy",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "23",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
         output_path,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -51,11 +61,18 @@ async def _run_ffmpeg(input_path: str, output_path: str, list_path: str) -> None
 @rt("/")
 def home():
     return Main(
-        H1("Loop a video 4 times"),
-        P("Upload a video (usually MP4), then download the looped result."),
+        H1("Stitch 4 videos together"),
+        P("Upload exactly 4 videos (in order), then download the stitched result."),
         Form(
-            Input(type="file", id="video", name="video", accept="video/*", required=True),
-            Button("Generate looped video", id="submit", type="submit"),
+            Input(
+                type="file",
+                id="videos",
+                name="videos",
+                accept="video/*",
+                multiple=True,
+                required=True,
+            ),
+            Button("Generate stitched video", id="submit", type="submit"),
             id="form",
         ),
         Div(id="status"),
@@ -63,14 +80,14 @@ def home():
         Script(
             """
 const form = document.getElementById('form');
-const input = document.getElementById('video');
+const input = document.getElementById('videos');
 const submit = document.getElementById('submit');
 const status = document.getElementById('status');
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
-  if (!input.files.length) {
-    status.textContent = 'Choose a video first.';
+  if (input.files.length !== 4) {
+    status.textContent = 'Please choose exactly 4 videos.';
     return;
   }
 
@@ -78,10 +95,12 @@ form.addEventListener('submit', async (event) => {
   status.textContent = 'Processing... this can take a moment.';
 
   const body = new FormData();
-  body.append('video', input.files[0]);
+  for (const file of input.files) {
+    body.append('videos', file);
+  }
 
   try {
-    const response = await fetch('/loop', { method: 'POST', body });
+    const response = await fetch('/stitch', { method: 'POST', body });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       throw new Error(data.error || 'Upload failed.');
@@ -90,7 +109,7 @@ form.addEventListener('submit', async (event) => {
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
-    const fileName = `${(input.files[0].name || 'video').replace(/\.[^.]+$/, '')}-looped-x4.mp4`;
+    const fileName = `stitched-${Date.now()}.mp4`;
     anchor.href = url;
     anchor.download = fileName;
     document.body.appendChild(anchor);
@@ -98,7 +117,7 @@ form.addEventListener('submit', async (event) => {
     anchor.remove();
     URL.revokeObjectURL(url);
 
-    status.textContent = 'Done! Your looped video has been downloaded.';
+    status.textContent = 'Done! Your stitched video has been downloaded.';
   } catch (error) {
     status.textContent = error.message;
   } finally {
@@ -115,18 +134,18 @@ def health():
     return JSONResponse({"ok": True})
 
 
-@rt("/loop", methods=["POST"])
-async def loop_video(request: Request):
+@rt("/stitch", methods=["POST"])
+async def stitch_videos(request: Request):
     form = await request.form()
-    upload = form.get("video")
-    if upload is None:
-        return JSONResponse({"error": "Please upload a video file."}, status_code=400)
+    uploads = [upload for upload in form.getlist("videos") if upload and getattr(upload, "filename", "")]
+    if len(uploads) != 4:
+        return JSONResponse({"error": "Please upload exactly 4 video files."}, status_code=400)
 
-    input_suffix = Path(getattr(upload, "filename", "video.mp4") or "video.mp4").suffix or ".mp4"
-    input_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}{input_suffix}")
+    input_paths: list[str] = []
     list_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}-concat.txt")
-    output_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}-looped.mp4")
-    download_name = f"{_safe_basename(getattr(upload, 'filename', 'video'))}-looped-x4.mp4"
+    output_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}-stitched.mp4")
+    first_name = getattr(uploads[0], "filename", "video")
+    download_name = f"{_safe_basename(first_name)}-stitched.mp4"
 
     def cleanup(*paths: str) -> None:
         for path in paths:
@@ -137,20 +156,24 @@ async def loop_video(request: Request):
                 pass
 
     try:
-        content = await upload.read()
-        with open(input_path, "wb") as f:
-            f.write(content)
+        for upload in uploads:
+            input_suffix = Path(getattr(upload, "filename", "video.mp4") or "video.mp4").suffix or ".mp4"
+            input_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}{input_suffix}")
+            content = await upload.read()
+            with open(input_path, "wb") as f:
+                f.write(content)
+            input_paths.append(input_path)
 
-        await _run_ffmpeg(input_path, output_path, list_path)
+        await _run_ffmpeg(input_paths, output_path, list_path)
 
         return FileResponse(
             output_path,
             media_type="video/mp4",
             filename=download_name,
-            background=BackgroundTask(cleanup, input_path, list_path, output_path),
+            background=BackgroundTask(cleanup, *input_paths, list_path, output_path),
         )
     except Exception as exc:
-        cleanup(input_path, list_path, output_path)
+        cleanup(*input_paths, list_path, output_path)
         return JSONResponse(
             {
                 "error": "Failed to process video. Confirm ffmpeg is installed and the file is valid.",
