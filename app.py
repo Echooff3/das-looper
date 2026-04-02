@@ -66,10 +66,10 @@ def home():
         H1("Build a stitched loop from up to 4 videos"),
         P("Upload 1 to 4 videos, then download the stitched result."),
         Form(
-            Input(type="file", id="video1", name="video1", accept="video/*", required=True),
-            Input(type="file", id="video2", name="video2", accept="video/*"),
-            Input(type="file", id="video3", name="video3", accept="video/*"),
-            Input(type="file", id="video4", name="video4", accept="video/*"),
+            Input(type="file", id="video1", name="video1", accept="video/*", required=True, multiple=True),
+            Input(type="file", id="video2", name="video2", accept="video/*", multiple=True),
+            Input(type="file", id="video3", name="video3", accept="video/*", multiple=True),
+            Input(type="file", id="video4", name="video4", accept="video/*", multiple=True),
             Button("Generate stitched video", id="submit", type="submit"),
             id="form",
             style="display: grid; gap: 0.75rem;",
@@ -94,12 +94,15 @@ let currentObjectUrl = null;
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
   const selectedFiles = inputs
-    .map((input) => input.files[0])
-    .filter((file) => !!file);
+    .flatMap((input) => Array.from(input.files || []))
+    .slice(0, 4);
 
   if (!selectedFiles.length) {
     status.textContent = 'Choose at least one video first.';
     return;
+  }
+  if (selectedFiles.length === 4 && inputs.some((input) => (input.files || []).length > 1)) {
+    status.textContent = 'Using the first 4 selected videos.';
   }
 
   submit.disabled = true;
@@ -207,8 +210,15 @@ def health():
 @rt("/loop", methods=["POST"])
 async def loop_video(request: Request):
     form = await request.form()
-    uploads = [form.get(f"video{i}") for i in range(1, 5)]
-    uploads = [upload for upload in uploads if upload and getattr(upload, "filename", "")]
+    uploads = []
+    for i in range(1, 5):
+        for upload in form.getlist(f"video{i}"):
+            if upload and getattr(upload, "filename", ""):
+                uploads.append(upload)
+                if len(uploads) == 4:
+                    break
+        if len(uploads) == 4:
+            break
     if not uploads:
         return JSONResponse({"error": "Please upload at least one video file."}, status_code=400)
 
