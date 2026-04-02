@@ -1,3 +1,4 @@
 python-fasthtml==0.6.10
+sqlite-minutils>=3.37.0
 uvicorn[standard]==0.34.0
 python-multipart==0.0.20
